@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>GitHub social graph</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body {
+                height: 100%;
+                width: 10%;
+            }
+
+            #cy {
+                width: 100%;
+                height: 100%;
+                position: absolute;
+                left: 0;
+                top: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="cy"></div>
+        <script src="jquery/jquery.min.js"></script>
+        <link href="qtip2/jquery.qtip.min.css" rel="stylesheet" type="text/css" />
+        <script src="qtip2/jquery.qtip.min.js"></script>
+        <script src="cytoscape/cytoscape.min.js"></script>
+        <script src="cytoscape-qtip/cytoscape-qtip.js"></script>
+        <script>
+            var cy = cytoscape({
+              container: document.getElementById('cy'),
+              elements: <%- JSON.stringify(data) %>,
+              style: <%- JSON.stringify(style) %>,
+              layout: {
+                name: 'cose',
+                idealEdgeLength: 100,
+                nodeOverlap: 20,
+                refresh: 20,
+                fit: true,
+                padding: 30,
+                randomize: false,
+                componentSpacing: 100,
+                nodeRepulsion: 400000,
+                edgeElasticity: 100,
+                nestingFactor: 5,
+                gravity: 80,
+                numIter: 1000,
+                initialTemp: 200,
+                coolingFactor: 0.95,
+                minTemp: 1.0
+              }
+            })
+
+            cy.nodes().forEach(node => {
+              node.qtip({
+                content: `<b>Name:</b> ${node.data('name') ? node.data('name') : '-'}<br />
+                          <b>Email:</b> ${node.data('email') ? node.data('email') : '-'}<br />
+                          <b>Location:</b> ${node.data('location') ? node.data('location') : '-'}<br />
+                          <b>Company:</b> ${node.data('company') ? node.data('company') : '-'}<br />
+                          <b>Blog:</b> ${node.data('blog') ? '<a href="' + node.data('blog') + '">' + node.data('blog') + '</a>' : '-'}<br />
+                          <b>Public repos:</b> ${node.data('public_repos') ? node.data('public_repos') : '-'}<br />
+                          <b>Public gists:</b> ${node.data('public_gists') ? node.data('public_gists') : '-'}<br />`,
+                position: {
+                  my: 'top center',
+                  at: 'bottom center',
+                },
+                style: {
+                  classes: 'qtip-bootstrap',
+                  tip: {
+                    width: 16,
+                    height: 8
+                  },
+                },
+              })
+            })
+        </script>
+    </body>
+</html>
