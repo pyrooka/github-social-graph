@@ -2,9 +2,10 @@
 Github Social Graph is a script which let you to create a graph about the connected users on GitHub.  
 It starts from one user and go as deep as you want.
 
-### Note
-Without GitHub App registration the API call limit is 60/hour. With registration it's 5000.  
+### Notes
+- Without GitHub App registration the API call limit is 60/hour. With registration it's 5000.  
 [https://github.com/settings/applications/new](https://github.com/settings/applications/new)
+- In default the script skips the follower/following users if it's more than a value, to save API calls. You can change this in the config.
 
 ### Usage
 1. ```npm install```
