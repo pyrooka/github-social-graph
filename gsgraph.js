@@ -56,6 +56,9 @@ const style = [
 // Cache.
 let cache = []
 
+// Should we refresh the cache?
+let refresh = false
+
 
 // Prepare the data for the cytoscape graph.
 function prepareData(users) {
@@ -124,7 +127,7 @@ function prepareData(users) {
 }
 
 // Get all the user.
-async function getAllUser(username, depth, refresh) {
+async function getAllUser(username, depth) {
   try{
     // All of the users in the session.
     let users = []
@@ -134,7 +137,7 @@ async function getAllUser(username, depth, refresh) {
     let promises = []
 
     // First get our main user.
-    const mainUser = await getUserData(username, refresh)
+    const mainUser = await getUserData(username)
     // Get the users to get in the next round.
     usersToGet = mainUser.followers ?  usersToGet.concat(mainUser.followers) : usersToGet
     usersToGet = mainUser.followings ? usersToGet.concat(mainUser.followings) : usersToGet
@@ -214,7 +217,7 @@ function getArgs() {
     }
   )
   parser.addArgument(
-    ['-r --refresh'],
+    ['-r', '--refresh'],
     {
       action: 'storeTrue',
       help: 'Refresh/update the cached users. If used every data will be requested from the API.'
@@ -247,7 +250,7 @@ function loadCache() {
 }
 
 // Update the cache.
-function updateCache(users, refresh, callback) {
+function updateCache(users, callback) {
   // Iterates over all the users.
   for (const user of users) {
     // Check if the user is already in the cache.
@@ -271,7 +274,7 @@ function updateCache(users, refresh, callback) {
 }
 
 // Get user informations from the GitHub API or the local cache.
-async function getUserData(username, refresh) {
+async function getUserData(username) {
   let user
 
   try {
@@ -431,6 +434,9 @@ function main() {
   // Get the argumenst from the command line.
   const args = getArgs()
 
+  // Set the refresh global variable.
+  refresh = args.refresh
+
   // Use the cache if at least one user in it.
   const isCacheLoaded = loadCache()
 
@@ -456,11 +462,11 @@ function main() {
     })
   })
 
-  getAllUser(args.user, args.depth, args.refresh)
+  getAllUser(args.user, args.depth)
     .then(async users => {
       // Update the cache in the background.
       console.log(chalk.green('Updating cache in the background. Please do not exit!'))
-      updateCache(users, args.refresh, err => {
+      updateCache(users, err => {
         if (err) console.log(chalk.red('Error during the cache update.', err))
         else console.log(chalk.green('Cache successfully updated.'))
       })
