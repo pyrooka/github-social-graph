@@ -35,8 +35,8 @@ const style = [
       'label': 'data(username)',
       'text-valign': 'top',
       'text-halign': 'center',
-      'background-color': '#555',
-      'text-outline-color': '#555',
+      'background-color': '#323232',
+      'text-outline-color': '#323232',
       'text-outline-width': '2px',
       'color': '#fff',
       'background-fit': 'cover',
@@ -71,12 +71,16 @@ function prepareData(users) {
   // Than the others.
   for (let i = 1; i < users.length; ++i) {
     data.push({ data: users[i] })
-    style.push({ selector: '#' + users[i].id, style: { 'background-image': users[i].avatar }})
+    if (users[i].followers && users[i].followers === -1 || users[i].followings && users[i].followings === -1) {
+      style.push({ selector: '#' + users[i].id, style: { 'background-image': users[i].avatar, 'text-outline-color': '#32328c' }})
+    } else {
+      style.push({ selector: '#' + users[i].id, style: { 'background-image': users[i].avatar }})
+    }
   }
 
   // Now create the edges.
   for (let user of users) {
-    if (user.followers) {
+    if (user.followers && user.followers !== -1) {
       for (let follower of user.followers) {
         // Get the follower user object.
         const followerObj = _.find(users, { 'username': follower })
@@ -93,7 +97,7 @@ function prepareData(users) {
         edges.push(edgeObj)
       }
     }
-    if (user.followings) {
+    if (user.followings && user.followings !== -1) {
       for (let following of user.followings) {
         // Get the following user object.
         const followingObj = _.find(users, { 'username': following })
@@ -167,8 +171,8 @@ async function getAllUser(username, depth, refresh) {
 
       // Fill the array for the next round with new users.
       for (let user of result) {
-        usersToGet = user.followers ?  usersToGet.concat(user.followers) : usersToGet
-        usersToGet = user.followings ? usersToGet.concat(user.followings) : usersToGet
+        usersToGet = user.followers && user.followers !== -1 ?  usersToGet.concat(user.followers) : usersToGet
+        usersToGet = user.followings && user.followings !== -1 ? usersToGet.concat(user.followings) : usersToGet
       }
 
       // Make it uniq. We don't want to get a user more than one time!
@@ -309,6 +313,7 @@ async function getUserData(username, refresh) {
       if (config.followersLimit < 0 || user.followers_count < config.followersLimit) {
         user.followers = await getFollowerUsers(username)
       } else {
+        user.followers = -1
         console.log(chalk.green('User ') + user.username + chalk.green(' followers has been skipped. ') + user.followers_count)
       }
     }
@@ -318,6 +323,7 @@ async function getUserData(username, refresh) {
       if (config.followingsLimit < 0 || user.following_count < config.followingsLimit) {
         user.followings = await getFollowingUsers(username)
       } else {
+        user.followings = -1
         console.log(chalk.green('User ') + user.username + chalk.green(' following users has been skipped. ') + user.following_count)
       }
     }
