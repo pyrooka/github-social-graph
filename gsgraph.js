@@ -4,12 +4,12 @@
 * TODO:
 *      - better error handling. I was too lazy.
 *      - better caching?
-*      - save output html with the data
 */
 
 const fs = require('fs')
 const path = require('path')
 
+const ejs = require('ejs')
 const _ = require('lodash')
 const chalk = require('chalk')
 const express = require('express')
@@ -223,6 +223,13 @@ function getArgs() {
       help: 'Refresh/update the cached users. If used every data will be requested from the API.'
     }
   )
+  parser.addArgument(
+    ['-s', '--save'],
+    {
+      action: 'storeTrue',
+      help: 'Save the generated page.'
+    }
+  )
 
   return parser.parseArgs()
 }
@@ -250,27 +257,79 @@ function loadCache() {
 }
 
 // Update the cache.
-function updateCache(users, callback) {
-  // Iterates over all the users.
-  for (const user of users) {
-    // Check if the user is already in the cache.
-    const userIndex = _.findIndex(cache, { 'id:': user.id })
+function updateCache(users) {
+  return new Promise((resolve, reject) => {
+    // Iterates over all the users.
+    for (const user of users) {
+      // Check if the user is already in the cache.
+      const userIndex = _.findIndex(cache, { 'id:': user.id })
 
-    // If not,
-    if (userIndex === -1) {
-      // simply add it.
-      cache.push(user)
-      continue
+      // If not,
+      if (userIndex === -1) {
+        // simply add it.
+        cache.push(user)
+        continue
+      }
+      // If it's in the cache already and have to refresh it.
+      // If we use the refresh it means the user data is from the API in this session so it's newer than the old one.
+      if (refresh) {
+        cache[userIndex] = user
+      }
     }
-    // If it's in the cache already and have to refresh it.
-    // If we use the refresh it means the user data is from the API in this session so it's newer than the old one.
-    if (refresh) {
-      cache[userIndex] = user
-    }
-  }
 
-  // Write the cache to file.
-  fs.writeFile(CACHE_FILE_NAME, JSON.stringify({ users: cache }), callback)
+    // Write the cache to file.
+    fs.writeFile(CACHE_FILE_NAME, JSON.stringify({ users: cache }), err => {
+      if (err) reject(err)
+      else resolve()
+    })
+  })
+}
+
+// Save the results to file.
+function save(data, callback) {
+  // Render the template.
+  ejs.renderFile('template.ejs', {
+    data: data,
+    style: style,
+  },
+  (err, res) => {
+    if (err) {
+      callback(err)
+    }
+    // First create the necessary directories if they aren't exist yet.
+    if (!fs.existsSync('output')) {
+      fs.mkdirSync('output')
+    }
+    if (!fs.existsSync(path.join('output', 'jquery'))) {
+      fs.mkdirSync(path.join('output', 'jquery'))
+    }
+    if (!fs.existsSync(path.join('output', 'qtip2'))) {
+      fs.mkdirSync(path.join('output', 'qtip2'))
+    }
+    if (!fs.existsSync(path.join('output', 'cytoscape'))) {
+      fs.mkdirSync(path.join('output', 'cytoscape'))
+    }
+    if (!fs.existsSync(path.join('output', 'cytoscape-qtip'))) {
+      fs.mkdirSync(path.join('output', 'cytoscape-qtip'))
+    }
+
+    // Then copy the files into them.
+    fs.copyFileSync(path.join(__dirname, 'node_modules', 'jquery', 'dist', 'jquery.min.js'),
+                    path.join('output', 'jquery', 'jquery.min.js'))
+    fs.copyFileSync(path.join(__dirname, 'node_modules', 'qtip2', 'dist', 'jquery.qtip.min.js'),
+                    path.join('output', 'qtip2', 'jquery.qtip.min.js'))
+    fs.copyFileSync(path.join(__dirname, 'node_modules', 'qtip2', 'dist', 'jquery.qtip.min.css'),
+                    path.join('output', 'qtip2', 'jquery.qtip.min.css'))
+    fs.copyFileSync(path.join(__dirname, 'node_modules', 'cytoscape', 'dist', 'cytoscape.min.js'),
+                    path.join('output', 'cytoscape', 'cytoscape.min.js'))
+    fs.copyFileSync(path.join(__dirname, 'node_modules', 'cytoscape-qtip', 'cytoscape-qtip.js'),
+                    path.join('output', 'cytoscape-qtip', 'cytoscape-qtip.js'))
+
+    // Finally write the rendered template to a file.
+    fs.writeFileSync(path.join('output', 'index.html'), res)
+
+    callback()
+  })
 }
 
 // Get user informations from the GitHub API or the local cache.
@@ -466,12 +525,22 @@ function main() {
     .then(async users => {
       // Update the cache in the background.
       console.log(chalk.green('Updating cache in the background. Please do not exit!'))
-      updateCache(users, err => {
-        if (err) console.log(chalk.red('Error during the cache update.', err))
-        else console.log(chalk.green('Cache successfully updated.'))
-      })
+
+      const updateResult = await updateCache(users)
+
+      updateResult ? console.log(chalk.red('Error during the cache update.', updateResult)) :
+                     console.log(chalk.green('Cache successfully updated.'))
 
       data = users ? prepareData(users) : [{ data: { id: 'ERR', username: 'No user :(' }}]
+
+      if (args.save) {
+        save(data, err => {
+          if (err) console.log(chalk.red('Error during the saving.', err))
+          else console.log(chalk.green('Successfully saved.'))
+        })
+
+        process.exit()
+      }
 
       // Start listening.
       server.listen(PORT)
@@ -483,7 +552,7 @@ function main() {
       .catch(err => {
         console.log(chalk.red('Error occured! The server didn\'t start.'))
         console.log(err)
-  })
+      })
 }
 
 // Start!
