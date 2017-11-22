@@ -7,6 +7,7 @@ It starts from one user and go as deep as you want.
 - Without GitHub App registration the API call limit is 60/hour. With registration it's 5000.  
 [https://github.com/settings/applications/new](https://github.com/settings/applications/new)
 - In default the script skips the follower/following users if it's more than a value, to save API calls. You can change this in the config.
+- The saved page may not working in Chrome because of the CORS. With Firefox it's working fine.
 
 ### Usage
 1. ```npm install```
