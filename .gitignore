@@ -3,5 +3,6 @@ node_modules/
 npm-debug.log
 
 # Custom
-.users_cache
 output/
+.images/
+.users_cache
