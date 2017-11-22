@@ -1,6 +1,7 @@
 # Github Social Graph
 Github Social Graph is a script which let you to create a graph about the connected users on GitHub.  
-It starts from one user and go as deep as you want.
+It starts from one user and go as deep as you want.  
+[DEMO](https://pyrooka.github.io/gsg/)
 
 ### Notes
 - Without GitHub App registration the API call limit is 60/hour. With registration it's 5000.  
