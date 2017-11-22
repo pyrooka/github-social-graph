@@ -13,6 +13,7 @@ const ejs = require('ejs')
 const _ = require('lodash')
 const chalk = require('chalk')
 const express = require('express')
+const requestLegacy = require('request')
 const request = require('request-promise-native')
 const ArgumentParser = require('argparse').ArgumentParser
 
@@ -21,11 +22,18 @@ const config = require('./config')
 
 const USERS_API_URL = 'https://api.github.com/users/'
 const LIMIT_API_URL = 'https://api.github.com/rate_limit'
+
 const USER_AGENT = 'github-social-graph'
+
 const PORT = 3003
+
 const TOKEN = config.clientId && config.clientSecret ?
               `?client_id=${config.clientId}&client_secret=${config.clientSecret}` : ''
+
 const CACHE_FILE_NAME = '.users_cache'
+const IMAGES_DIR_NAME = '.images'
+
+const IMAGE_EXTENSIONS = ['JPG', 'JPEG', 'PNG']
 
 // Style for the Cytoscape lib.
 const style = [
@@ -53,8 +61,11 @@ const style = [
   },
 ]
 
-// Cache.
-let cache = []
+// Cache with the user objects and the name of the cached images.
+let cache = {
+  users: [],
+  images: [],
+}
 
 // Should we refresh the cache?
 let refresh = false
@@ -68,13 +79,21 @@ function prepareData(users) {
   console.log(chalk.green('Preparing data...'))
 
   // Push the nodes (users) to the array.
-  // First the target user.
-  data.push({ data: users[0] })
-  style.push({ selector: '#' + users[0].id, style: { 'background-image': users[0].avatar, 'text-outline-color': '#f00' }})
-  // Than the others.
-  for (let i = 1; i < users.length; ++i) {
+  for (let i = 0; i < users.length; ++i) {
+
+    // Check if we have cached image or not.
+    for (const image of cache.images) {
+      if (image[0] === users[i].id.toString()) {
+        users[i].avatar = `images/${users[i].id}.${image[1]}`
+      }
+    }
+
     data.push({ data: users[i] })
-    if (users[i].followers && users[i].followers === -1 || users[i].followings && users[i].followings === -1) {
+
+    if (i === 0) {
+      style.push({ selector: '#' + users[0].id, style: { 'background-image': users[0].avatar, 'text-outline-color': '#f00' }})
+    }
+    else if (users[i].followers && users[i].followers === -1 || users[i].followings && users[i].followings === -1) {
       style.push({ selector: '#' + users[i].id, style: { 'background-image': users[i].avatar, 'text-outline-color': '#32328c' }})
     } else {
       style.push({ selector: '#' + users[i].id, style: { 'background-image': users[i].avatar }})
@@ -234,9 +253,26 @@ function getArgs() {
   return parser.parseArgs()
 }
 
-// Load the JSON cache. It's a synchronous function.
+// Load the JSON cache and the list of the images' name. It's a synchronous function.
 function loadCache() {
-  // Read it sync because we have to wait it at the start so it doesn't matter.
+  // Use sync because we have to wait it at the start so it doesn't matter.
+  // Start with the images, becuse it's less important than the users.
+  // If the directory isn't exists create it.
+  if (!fs.existsSync(IMAGES_DIR_NAME)) {
+    fs.mkdirSync(IMAGES_DIR_NAME)
+  } else {
+    // List the files.
+    const files = fs.readdirSync(IMAGES_DIR_NAME)
+    // If the file has the correct extension push it to the cache.
+    for (const fileName of files) {
+      let splitted = fileName.split('.')
+      if (IMAGE_EXTENSIONS.includes(splitted[splitted.length - 1].toUpperCase())) {
+        cache.images.push(splitted)
+      }
+    }
+  }
+
+  // Now process the users cache.
   // If the file doesn't exists, create a new one and return false.
   if (!fs.existsSync(CACHE_FILE_NAME)) {
     fs.writeFileSync(CACHE_FILE_NAME, JSON.stringify({ users: [] }))
@@ -247,7 +283,7 @@ function loadCache() {
   const cacheJson = fs.readFileSync(CACHE_FILE_NAME)
 
   try {
-    cache = JSON.parse(cacheJson).users
+    cache.users = JSON.parse(cacheJson).users
   } catch (err) {
     console.log(chalk.red(err))
     return false
@@ -258,27 +294,36 @@ function loadCache() {
 
 // Update the cache.
 function updateCache(users) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     // Iterates over all the users.
     for (const user of users) {
+      // Check if we already have image for the user.
+      if (!cache.images.includes(user.id.toString())) {
+        try {
+          await saveImage(user.id.toString(), user.avatar)
+        } catch (err) {
+          console.log(chalk.red(`Image saving failed for ${user.username}. ${err}`))
+        }
+      }
+
       // Check if the user is already in the cache.
-      const userIndex = _.findIndex(cache, { 'id:': user.id })
+      const userIndex = _.findIndex(cache.users, { 'id:': user.id })
 
       // If not,
       if (userIndex === -1) {
         // simply add it.
-        cache.push(user)
+        cache.users.push(user)
         continue
       }
       // If it's in the cache already and have to refresh it.
       // If we use the refresh it means the user data is from the API in this session so it's newer than the old one.
       if (refresh) {
-        cache[userIndex] = user
+        cache.users[userIndex] = user
       }
     }
 
     // Write the cache to file.
-    fs.writeFile(CACHE_FILE_NAME, JSON.stringify({ users: cache }), err => {
+    fs.writeFile(CACHE_FILE_NAME, JSON.stringify({ users: cache.users }), err => {
       if (err) reject(err)
       else resolve()
     })
@@ -300,6 +345,9 @@ function save(data, callback) {
     if (!fs.existsSync('output')) {
       fs.mkdirSync('output')
     }
+    if (!fs.existsSync(path.join('output', 'images'))) {
+      fs.mkdirSync(path.join('output', 'images'))
+    }
     if (!fs.existsSync(path.join('output', 'jquery'))) {
       fs.mkdirSync(path.join('output', 'jquery'))
     }
@@ -314,6 +362,15 @@ function save(data, callback) {
     }
 
     // Then copy the files into them.
+    for (const file of fs.readdirSync(IMAGES_DIR_NAME)) {
+      try {
+        fs.copyFileSync(path.join(IMAGES_DIR_NAME, file),
+                        path.join('output', 'images', file))
+      } catch (err) {
+        console.log(chalk.red('Cannot copy file:' + file))
+      }
+    }
+
     fs.copyFileSync(path.join(__dirname, 'node_modules', 'jquery', 'dist', 'jquery.min.js'),
                     path.join('output', 'jquery', 'jquery.min.js'))
     fs.copyFileSync(path.join(__dirname, 'node_modules', 'qtip2', 'dist', 'jquery.qtip.min.js'),
@@ -332,15 +389,38 @@ function save(data, callback) {
   })
 }
 
+// Save the image from the given URL.
+function saveImage(id, url) {
+  return new Promise((resolve, reject) => {
+    // Options for the content type check request.
+    const options = {
+      method: 'GET',
+      uri: url,
+      resolveWithFullResponse: true,
+    }
+
+    // First get the content type for the image.
+    request(options)
+      .then(res => {
+        const contentType = res.headers['content-type'].split('/').pop()
+        requestLegacy(url).pipe(fs.createWriteStream(`${IMAGES_DIR_NAME}/${id}.${contentType}`))
+          .on('finish', resolve())
+      })
+      .catch(err => {
+        reject(err)
+      })
+    })
+}
+
 // Get user informations from the GitHub API or the local cache.
 async function getUserData(username) {
   let user
 
   try {
     // If no need to refresh the user and we can use the cache
-    if (!refresh && cache.length) {
+    if (!refresh && cache.users.length) {
       // search for the user.
-      const userObj = _.find(cache, { 'username': username })
+      const userObj = _.find(cache.users, { 'username': username })
       // If we found the user in the cache
       if (userObj) {
         console.log(chalk.green('Using cached data for ') + username)
@@ -507,7 +587,8 @@ function main() {
   server.set('view engine', 'ejs')
   // Views in the root dir. Sorry too small project for structuring better.
   server.set('views', path.join(__dirname))
-  // Bind libs path.
+  // Bind paths for host.
+  server.use('/images', express.static(path.join(__dirname, IMAGES_DIR_NAME)))
   server.use('/jquery', express.static(path.join(__dirname, 'node_modules', 'jquery', 'dist')))
   server.use('/qtip2', express.static(path.join(__dirname, 'node_modules', 'qtip2', 'dist')))
   server.use('/cytoscape', express.static(path.join(__dirname, 'node_modules', 'cytoscape', 'dist')))
