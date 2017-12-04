@@ -298,7 +298,14 @@ function updateCache(users) {
     // Iterates over all the users.
     for (const user of users) {
       // Check if we already have image for the user.
-      if (!cache.images.includes(user.id.toString())) {
+      let found = false
+      for (const file of cache.images) {
+        if (file[0] === user.id.toString()) {
+          found = true
+        }
+      }
+
+      if (!found) {
         try {
           await saveImage(user.id.toString(), user.avatar)
         } catch (err) {
@@ -607,7 +614,11 @@ function main() {
       // Update the cache in the background.
       console.log(chalk.green('Updating cache in the background. Please do not exit!'))
 
-      const updateResult = await updateCache(users)
+      try {
+        const updateResult = await updateCache(users)
+      } catch (err) {
+        console.log(chalk.red('Error while updating the cache.', err))
+      }
 
       updateResult ? console.log(chalk.red('Error during the cache update.', updateResult)) :
                      console.log(chalk.green('Cache successfully updated.'))
