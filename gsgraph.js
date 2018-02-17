@@ -616,12 +616,12 @@ function main() {
 
       try {
         const updateResult = await updateCache(users)
+
+        updateResult ? console.log(chalk.red('Error during the cache update.', updateResult)) :
+                       console.log(chalk.green('Cache successfully updated.'))
       } catch (err) {
         console.log(chalk.red('Error while updating the cache.', err))
       }
-
-      updateResult ? console.log(chalk.red('Error during the cache update.', updateResult)) :
-                     console.log(chalk.green('Cache successfully updated.'))
 
       data = users ? prepareData(users) : [{ data: { id: 'ERR', username: 'No user :(' }}]
 
