@@ -10,7 +10,7 @@
     "cytoscape-qtip": "^2.7.1",
     "ejs": "^2.5.7",
     "express": "^4.16.4",
-    "lodash": "^4.17.11",
+    "lodash": "^4.17.13",
     "request": "^2.88.0",
     "request-promise-native": "^1.0.7"
   },
