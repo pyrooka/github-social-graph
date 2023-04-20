@@ -8,7 +8,7 @@
     "chalk": "^2.4.2",
     "cytoscape": "^3.4.1",
     "cytoscape-qtip": "^2.7.1",
-    "ejs": "^2.5.7",
+    "ejs": "^3.1.7",
     "express": "^4.18.2",
     "lodash": "^4.17.21",
     "request": "^2.88.0",
